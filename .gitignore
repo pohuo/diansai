@@ -1,0 +1,29 @@
+# CCS build outputs
+Debug/
+Release/
+*.o
+*.obj
+*.d
+*.out
+*.map
+*.hex
+*.bin
+*.elf
+*.lst
+
+# IDE-generated indexes and local state
+.clangd
+.clangd/
+.metadata/
+.cache/
+*.launch
+*.log
+
+# Operating-system files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local toolchains and vendor SDKs must stay outside this repository
+ccs/
+mspm0_sdk_*/

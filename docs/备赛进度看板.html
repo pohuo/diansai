@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>海南省 2026 电赛备赛进度看板</title>
+  <style>
+    :root { --ink:#16202a; --muted:#687586; --line:#dbe3ec; --bg:#f5f8fb; --card:#fff; --brand:#0b7285; --brand2:#155e75; --ok:#16803b; --warn:#b45309; --bad:#c2410c; --planned:#5b5bd6; --shadow:0 8px 24px rgba(25,45,70,.08); }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); font:14px/1.5 system-ui,-apple-system,"Microsoft YaHei",sans-serif; background:var(--bg); }
+    header { color:#fff; padding:28px max(20px,calc((100vw - 1180px)/2)); background:linear-gradient(130deg,#075a6b,#174b73 58%,#253b65); }
+    h1 { margin:0; font-size:25px; letter-spacing:.2px; } .sub { margin:6px 0 0; opacity:.86; }
+    main { max-width:1180px; margin:0 auto; padding:20px; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:-15px; }
+    .stat,.card { background:var(--card); border:1px solid #e9eef3; border-radius:12px; box-shadow:var(--shadow); }
+    .stat { padding:14px 16px; } .stat b { display:block; margin-top:3px; font-size:23px; } .stat small,.hint { color:var(--muted); }
+    nav { display:flex; gap:8px; flex-wrap:wrap; margin:22px 0 16px; } button,.btn { border:1px solid var(--line); border-radius:8px; background:#fff; padding:8px 11px; cursor:pointer; color:var(--ink); font:inherit; } button:hover,.btn:hover { border-color:#73aabd; } button.active { background:var(--brand); border-color:var(--brand); color:#fff; }
+    .panel { display:none; } .panel.active { display:block; }
+    .grid { display:grid; grid-template-columns:1.25fr .75fr; gap:16px; } .card { padding:17px; margin-bottom:16px; }
+    h2 { margin:0 0 12px; font-size:17px; } h3 { margin:0 0 8px; font-size:15px; }
+    .notice { border-left:4px solid #d97706; background:#fff8eb; padding:11px 12px; border-radius:5px; margin-bottom:16px; }
+    .green { border-left-color:var(--ok); background:#effaf2; }
+    .timeline { display:grid; grid-template-columns:repeat(14,1fr); gap:3px; } .day { text-align:center; padding:7px 2px; border-radius:6px; background:#ebf0f5; color:#627083; font-size:12px; } .day.today { background:#d6f0f4; color:#075a6b; font-weight:700; outline:2px solid #6bb7c3; } .day.race { background:#ffe1cc; color:#a34112; font-weight:700; }
+    .legend { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 0; color:var(--muted); font-size:12px; }.dot { display:inline-block; width:9px;height:9px;border-radius:99px;margin-right:4px; }.p0{background:#c2410c}.p1{background:#b7791f}.p2{background:#5b5bd6}
+    .bar { height:10px; background:#e8eef2; border-radius:9px; overflow:hidden; } .bar > i { display:block; height:100%; background:linear-gradient(90deg,#0f91a4,#18a178); border-radius:9px; }
+    table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:9px 7px; border-bottom:1px solid #edf1f4; vertical-align:top; } th { color:#526172; font-size:12px; white-space:nowrap; } tr:last-child td { border-bottom:0; }
+    input,select,textarea { width:100%; border:1px solid var(--line); border-radius:7px; padding:7px; font:inherit; background:#fff; } input[type=range] { padding:0; accent-color:var(--brand); } textarea { min-height:58px; resize:vertical; }
+    .badge { display:inline-block; padding:2px 7px; border-radius:99px; font-size:12px; white-space:nowrap; } .b-p0{background:#ffebe2;color:#a44012}.b-p1{background:#fff4d7;color:#8c6200}.b-p2{background:#eeeeff;color:#4d4bb7}.s-planned{background:#eef2ff;color:#4b52b4}.s-progress{background:#e4f5f8;color:#086778}.s-blocked{background:#fff0e8;color:#b44917}.s-passed{background:#e5f7eb;color:#176d34}
+    .task-title { min-width:160px; } .mini { font-size:12px;color:var(--muted); } .row-actions { display:flex; gap:6px; align-items:center; } .row-actions button { padding:5px 7px; font-size:12px; } .danger { color:#af351e; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; } .form-grid .full { grid-column:1/-1; } label { display:block; color:#566577; font-size:12px; margin-bottom:4px; }
+    .toolbar { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; } .toolbar .left,.toolbar .right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .filter { width:auto; min-width:118px; } .log { border-left:2px solid #c4d7df; padding:0 0 14px 13px; margin-left:4px; position:relative; }.log:before { content:""; position:absolute; width:9px;height:9px;background:var(--brand);border-radius:50%;left:-5px;top:4px; }.log time{color:var(--muted);font-size:12px}.empty{color:var(--muted);padding:14px 0;text-align:center;}
+    details summary { cursor:pointer; font-weight:600; } details { margin-top:12px; } code { background:#eef3f6; padding:1px 4px; border-radius:4px; }
+    .checklist li { margin:7px 0; } .checklist input { width:auto; margin-right:7px; }
+    @media(max-width:850px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.task-table{display:block;overflow-x:auto}.timeline{grid-template-columns:repeat(7,1fr)}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>海南省 2026 电赛 · 地面控制类备赛看板</h1>
+  <p class="sub">矫利渝（统筹/初设/报告） · 文超平（模块测试/硬件） · 占蓝雪（Debug/代码精进/检查）</p>
+</header>
+<main>
+  <section class="stats" aria-label="总体状态">
+    <div class="stat"><small>距离比赛</small><b id="daysLeft">—</b><small>2026-07-29 08:00</small></div>
+    <div class="stat"><small>加权备赛进度</small><b id="overall">0%</b><div class="bar"><i id="overallBar"></i></div></div>
+    <div class="stat"><small>核心验收通过</small><b id="corePass">0 / 0</b><small>P0 任务须有验收证据</small></div>
+    <div class="stat"><small>当前阻塞项</small><b id="blockers">0</b><small>优先在每日站会处理</small></div>
+  </section>
+
+  <nav aria-label="看板导航">
+    <button class="active" data-tab="overview">冲刺总览</button>
+    <button data-tab="owners">人员与交付</button>
+    <button data-tab="tasks">任务与验收</button>
+    <button data-tab="procurement">设备与到货</button>
+    <button data-tab="log">每日记录</button>
+    <button data-tab="backup">备份与说明</button>
+  </nav>
+
+  <section class="panel active" id="overview">
+    <div class="notice"><b>当前策略：</b>原指南的 8 周训练压缩为 14 天冲刺。P0（核心）任务必须通过量化验收；P1（重要）允许记录“可运行 + 已知限制”；P2（增强）仅在不影响 P0 的前提下推进。</div>
+    <div class="grid">
+      <div>
+        <div class="card"><h2>7 月 15 日—29 日冲刺日历</h2><div class="timeline" id="timeline"></div><div class="legend"><span><i class="dot p0"></i>P0 核心：严格验收</span><span><i class="dot p1"></i>P1 重要：有证据的阶段完成</span><span><i class="dot p2"></i>P2 增强：不阻塞基本分</span></div></div>
+        <div class="card"><h2>今日最重要的三件事</h2><ol id="todayFocus" class="checklist"></ol><p class="hint">勾选只记录今日行动；模块是否“通过”仍以任务页的验收状态为准。</p></div>
+        <div class="card"><h2>赛前红线</h2><ul><li>设备未到前，先冻结软件工程、接口命名、测试表和接线草图。</li><li>3S 电池不可直接接入 6V 电机或 5V/3.3V 逻辑；先确认每条降压与电流余量。</li><li>比赛前必须形成一套可离线编译、烧录、恢复的最小救援固件。</li></ul></div>
+      </div>
+      <div>
+        <div class="card"><h2>当前基线（7 月 19 日）</h2><table><tr><th>项目</th><td>状态</td></tr><tr><td>已完成</td><td>三名队员均已安装 CCS；待实板编译/烧录验证</td></tr><tr><td>设备状态</td><td>所有采购设备已到货；尚未完成规格与通电验收</td></tr><tr><td>剩余时间</td><td>10 天，进入实物联调冲刺</td></tr><tr><td>比赛</td><td>2026-07-29 08:00</td></tr></table></div>
+        <div class="card"><h2>本次冲刺目标</h2><p><b>7 月 28 日 20:00 前，交付一台以 MSPM0 为唯一控制核心、可离线烧录并稳定复现基本动作的基线车。</b></p><ol><li>一键冷启动、急停与安全停机可用。</li><li>双电机可控正反转，完成 1 m 直行与 90° 转向的重复测试。</li><li>循迹/测距至少完成一个稳定的传感闭环。</li><li>完整流程 10 次至少成功 9 次，并留下测试数据、接线图与可烧录备份。</li></ol></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="owners">
+    <div class="notice green"><b>责任规则：</b>每项工作只有一名主责人；复核人必须在验收数据、缺陷记录或发布清单上留下结论。口头表示“做完了”不算交付。</div>
+    <div class="card">
+      <h2>三人责任与交付矩阵</h2>
+      <div class="task-table"><table>
+        <thead><tr><th>成员</th><th>角色边界</th><th>具体任务</th><th>必须交付</th><th>截止</th><th>复核人</th></tr></thead>
+        <tbody>
+          <tr><td><b>矫利渝</b><div class="mini">统筹、代码初设、报告</div></td><td>决定接口和集成版本；负责最终软件能运行、材料能交付。</td><td>MSPM0 最小工程；代码骨架与接口表；编码器/PID；直行与转向控制；状态机集成；报告与发布包。</td><td>① 可离线编译烧录的仓库；② 引脚/接口表；③ PID 参数与实测数据；④ stable 固件及 HEX/BIN；⑤ 报告、接线图汇总版。</td><td>7/27 功能冻结<br>7/28 20:00 发布</td><td>占蓝雪复核代码与版本；文超平提供实测数据</td></tr>
+          <tr><td><b>文超平</b><div class="mini">模块测试、硬件搭建</div></td><td>对每条电源、每个接口和每个实体模块“能安全工作”负责。</td><td>设备验收；3S→6V/5V/3.3V 分路；保险/急停；底盘与电机驱动；编码器接线；循迹/ToF 标定；线束与备件。</td><td>① 设备型号/电压/接口台账；② 电源与接线图；③ 电压、电流、温升记录；④ 可独立运行的底盘；⑤ 传感器标定表；⑥ 贴好标签的备件箱。</td><td>7/20 电源验收<br>7/24 底盘验收<br>7/26 传感验收</td><td>占蓝雪按表复测；矫利渝确认软件接口</td></tr>
+          <tr><td><b>占蓝雪</b><div class="mini">Debug、代码精进、检查</div></td><td>不替代主责开发；负责发现问题、复现问题、确认修复和决定是否通过。</td><td>代码审查；超时/故障码/安全停机；缺陷清单；模块回归；冷启动与断线测试；完整流程 10 次复测；发布候选验收。</td><td>① 按严重度排列的缺陷清单；② 每个缺陷的复现与关闭记录；③ 模块回归表；④ 10 次完整流程数据；⑤ final_candidate 验收结论。</td><td>每日 22:00 清缺陷<br>7/28 18:00 验收</td><td>矫利渝确认软件修复；文超平确认硬件修复</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="grid">
+      <div class="card"><h2>任务流转方式</h2><ol><li><b>主责人提交：</b>实物/代码可运行，并附版本、条件和数据。</li><li><b>复核人复现：</b>不使用主责人的临时操作，按说明独立运行。</li><li><b>占蓝雪判定：</b>通过、带限制通过或退回；P0 退回项进入当天最高优先级。</li><li><b>矫利渝归档：</b>稳定版本打标签，将数据同步进报告和备份包。</li></ol></div>
+      <div class="card"><h2>禁止出现的责任空档</h2><ul><li>文超平只接线、不记录电压和接口。</li><li>矫利渝只写代码、不提供可烧录版本。</li><li>占蓝雪只指出问题、不写复现步骤和复测结论。</li><li>三人一起联调，但无人更新接线图、参数表和稳定标签。</li></ul></div>
+    </div>
+  </section>
+  <section class="panel" id="tasks">
+    <div class="card">
+      <div class="toolbar"><div class="left"><h2 style="margin:0">任务与验收</h2><select id="priorityFilter" class="filter"><option value="all">全部优先级</option><option value="P0">P0 核心</option><option value="P1">P1 重要</option><option value="P2">P2 增强</option></select><select id="statusFilter" class="filter"><option value="all">全部状态</option><option value="planned">未开始</option><option value="progress">进行中</option><option value="blocked">受阻</option><option value="passed">已通过</option></select></div><div class="right"><button id="addTask">+ 新任务</button><button id="resetTasks" class="danger">恢复初始计划</button></div></div>
+      <div class="task-table"><table><thead><tr><th>任务 / 负责人</th><th>优先级</th><th>计划</th><th>状态</th><th>完成度</th><th>验收 / 证据</th><th></th></tr></thead><tbody id="taskRows"></tbody></table></div>
+      <p class="hint">判定建议：P0 只有“实测成功 + 数据/日志/版本号”才能改为“已通过”；P1 可先填写已知限制；P2 不计入核心通过率。</p>
+    </div>
+  </section>
+
+  <section class="panel" id="procurement">
+    <div class="notice"><b>设备状态：</b>购物车物品已全部到货，当前进入“逐件规格确认与通电验收”。以下提示并不否定所购模块，而是标出与最终指南存在接口、电压或备件风险的项目。</div>
+    <div class="card"><div class="toolbar"><h2 style="margin:0">设备台账</h2><button id="addGear">+ 添加设备</button></div><div class="task-table"><table><thead><tr><th>设备</th><th>数量</th><th>状态</th><th>优先级</th><th>到货/验证动作</th><th>备注</th><th></th></tr></thead><tbody id="gearRows"></tbody></table></div></div>
+    <div class="grid"><div class="card"><h2>到货即做的 30 分钟验收</h2><ol><li>拍照并记录型号、链接、数量、插头和电压标识。</li><li>主控：空载上电、CCS 编译、烧录 LED/串口最小程序。</li><li>电源：万用表测 3S 输入与每一路 6V/5V/3.3V 输出，确认极性。</li><li>电机/驱动：先脱离主控，用低占空比单路正反转；记录空载电流。</li><li>传感器/视觉：确认通信接口、电平和供电，不直接接入主控。</li></ol></div><div class="card"><h2>购物车的关键风险</h2><ul><li><b>3S 12V 电池：</b>需要合格的 6V 电机支路和独立 5V/3.3V 降压，不能跳线直供。</li><li><b>TB6612FNG：</b>需核实其连续/峰值电流覆盖所购电机的堵转电流；指南的“每电机一驱动”仍应保留。</li><li><b>4 路循迹：</b>可先练习，但不等同于指南中的 8 路模拟灰度阵列。</li><li><b>视觉模块：</b>确认与 MSPM0 之间为 3.3V UART 且协议可离线调试。</li></ul></div></div>
+  </section>
+
+  <section class="panel" id="log">
+    <div class="grid"><div class="card"><h2>记录今日进展</h2><form id="logForm"><div class="form-grid"><div><label>日期</label><input id="logDate" type="date" required></div><div><label>记录人</label><select id="logAuthor"><option>矫利渝</option><option>文超平</option><option>占蓝雪</option></select></div><div class="full"><label>完成/测试了什么？</label><textarea id="logText" required placeholder="例如：CCS 已创建 MSPM0 工程；LED 编译成功，待板子到货后烧录。"></textarea></div><div class="full"><label>问题、数据或下一步</label><textarea id="logIssue" placeholder="记录电压、误差、成功率、阻塞项或明日行动。"></textarea></div></div><p><button type="submit">保存记录</button></p></form></div><div class="card"><h2>每日站会模板（10 分钟）</h2><ol><li>昨天的可验证输出是什么？</li><li>今天每人只承诺一项能验收的任务。</li><li>有哪些阻塞？超过 30 分钟不能定位的硬件，改用备件或降级方案。</li><li>由占蓝雪复测并记录问题；矫利渝同步报告素材；文超平更新硬件台账。</li></ol></div></div>
+    <div class="card"><div class="toolbar"><h2 style="margin:0">进度日志</h2><button id="clearLogs" class="danger">清空日志</button></div><div id="logList"></div></div>
+  </section>
+
+  <section class="panel" id="backup">
+    <div class="grid"><div class="card"><h2>本机数据</h2><p>所有修改自动保存在此浏览器的本机存储中。导出 JSON 后可拷贝到 U 盘或提交到团队仓库；导入会覆盖当前看板数据。</p><p><button id="exportData">导出进度 JSON</button> <label class="btn" for="importData">导入进度 JSON</label><input id="importData" type="file" accept="application/json" hidden></p><p><button id="downloadHtml">下载当前看板副本</button></p></div><div class="card"><h2>使用方式</h2><ol><li>每天先填“每日记录”，再在任务页更新状态、完成度和验收证据。</li><li>在这个对话里也可直接说“任务名 + 结果/数据/问题”，我会帮你判断状态并更新版本。</li><li>任何 P0 任务若没有证据，请保持“进行中”或“受阻”，避免虚高进度。</li></ol></div></div>
+    <div class="card"><h2>验收证据的最小格式</h2><p><code>日期｜设备/固件版本｜测试条件｜结果数据｜操作者</code></p><p class="hint">示例：2026-07-21｜motor_ok-v0.2｜7.4V、空载、轮胎离地｜左右轮 10 次均正反转，平均电流 0.31A/0.29A｜文超平。</p></div>
+  </section>
+</main>
+<script>
+(() => {
+  const key = 'nuedc-2026-ground-control-dashboard-v3';
+  const initial = {
+    tasks: [
+      {id:'t1',title:'CCS 工程与 MSPM0 最小程序',owner:'矫利渝',priority:'P0',start:'2026-07-15',end:'2026-07-19',status:'progress',progress:50,evidence:'三名队员均已安装 CCS；设备已到货。待完成开发板 LED、串口和离线烧录验证。'},
+      {id:'t2',title:'冻结代码骨架、接口表与 Git 规则',owner:'矫利渝',priority:'P0',start:'2026-07-19',end:'2026-07-20',status:'planned',progress:0,evidence:'验收：建立 Common/Bsp/App/Config/Docs；输出接口表与首个可编译标签。'},
+      {id:'t3',title:'到货验收与动力链规格核对',owner:'文超平',priority:'P0',start:'2026-07-19',end:'2026-07-20',status:'progress',progress:20,evidence:'所有采购设备已到货。验收：主控、驱动、电机、电池、电源模块均有型号/电压/接口记录。'},
+      {id:'t4',title:'电源分路、保险与急停',owner:'文超平',priority:'P0',start:'2026-07-19',end:'2026-07-20',status:'planned',progress:0,evidence:'验收：3S 输入经独立降压得到安全的电机、5V、3.3V支路；记录空载电压。'},
+      {id:'t5',title:'单电机驱动、正反转与限幅',owner:'文超平',priority:'P0',start:'2026-07-20',end:'2026-07-21',status:'planned',progress:0,evidence:'验收：左右电机各 10 次正反转成功；记录空载电流与驱动温升。'},
+      {id:'t6',title:'编码器测速与单轮速度 PID',owner:'矫利渝',priority:'P0',start:'2026-07-21',end:'2026-07-22',status:'planned',progress:0,evidence:'验收：低速无异常跳变，阶跃响应与参数记录完整。'},
+      {id:'t7',title:'底盘直行 1 m 与 90° 转向',owner:'矫利渝',priority:'P0',start:'2026-07-22',end:'2026-07-24',status:'planned',progress:0,evidence:'验收：1m 误差≤3cm，90°误差≤3°；每项至少 10 次。'},
+      {id:'t8',title:'循迹 / ToF 传感与安全降级',owner:'文超平',priority:'P1',start:'2026-07-24',end:'2026-07-25',status:'planned',progress:0,evidence:'验收：传感器读数稳定；断开后 1 秒内安全停机，不发生卡死。'},
+      {id:'t9',title:'视觉通信与云台（仅传结果）',owner:'占蓝雪',priority:'P2',start:'2026-07-25',end:'2026-07-27',status:'planned',progress:0,evidence:'验收：3.3V UART 有帧头、长度、校验、超时；MSPM0 保持决策与控制。'},
+      {id:'t10',title:'状态机、自检与一键恢复',owner:'矫利渝（占蓝雪复核）',priority:'P0',start:'2026-07-25',end:'2026-07-27',status:'planned',progress:0,evidence:'矫利渝提交状态机与固件；占蓝雪独立复测。验收：冷启动、换电池后无需改代码；错误码与安全停机可见。'},
+      {id:'t11',title:'缺陷闭环与完整流程 10 次回归',owner:'占蓝雪',priority:'P0',start:'2026-07-26',end:'2026-07-28',status:'planned',progress:0,evidence:'交付：缺陷清单、复现/关闭记录和回归表。验收：完整流程 10 次至少 9 次成功，记录条件、失败原因和版本号。'},
+      {id:'t12',title:'报告、测试表、接线图与离线备份',owner:'矫利渝（全员供数）',priority:'P0',start:'2026-07-24',end:'2026-07-29',status:'planned',progress:0,evidence:'矫利渝汇总；文超平提交硬件数据；占蓝雪核对结论。验收：真实数据入表；代码/ELF/HEX/BIN/接线图/参数表至少三份备份。'},
+      {id:'t13',title:'赛前封箱候选版与快速恢复演练',owner:'占蓝雪验收 / 全员执行',priority:'P0',start:'2026-07-28',end:'2026-07-29',status:'planned',progress:0,evidence:'占蓝雪签署 final_candidate 结论。验收：三人均能独立编译、烧录、换板、急停与恢复。'}
+    ],
+    gear: [
+      {id:'g1',name:'MSPM0G3507 开发板 / DAPLink 套装',qty:'2',status:'已到货',priority:'P0',action:'到货后分别编译、烧录、调试；确认两块可独立替换。',note:'购物车中两款套装各 1；记录具体板型和 SWD 引脚。'},
+      {id:'g2',name:'R3 两轮差速带编码器底盘',qty:'1',status:'已到货',priority:'P0',action:'核对电机额定电压、堵转电流、编码器 AB 相电平和轮径。',note:'需确认是否符合最终尺寸与备件策略。'},
+      {id:'g3',name:'3S 12V 5100mAh 电池（含充电器）',qty:'2',status:'已到货',priority:'P0',action:'确认 BMS、充电器和输出端；实测降压后 6V/5V/3.3V。',note:'不可直接接 6V 电机或逻辑模块。'},
+      {id:'g4',name:'TB6612FNG 电机驱动板',qty:'1',status:'已到货',priority:'P0',action:'核对连续/峰值电流是否覆盖电机堵转电流；确认电机通道和散热。',note:'指南基线为每电机独立驱动且有备件，当前数量不足。'},
+      {id:'g5',name:'5V/3.3V 降压模块（P03B）',qty:'1',status:'已到货',priority:'P0',action:'空载与带载测纹波、压降、温升；确认额定电流。',note:'当前仅 1 个，不满足电机/视觉/舵机分路策略。'},
+      {id:'g6',name:'MP1584EN DC-DC 可调降压模块',qty:'2',status:'已到货',priority:'P0',action:'固定输出前先调压；分别验证 6V 和 5V 支路电流余量。',note:'调压完成后贴电压标签。'},
+      {id:'g7',name:'4 路循迹传感器',qty:'1',status:'已到货',priority:'P1',action:'测输出电平/是否模拟量；标定黑白阈值。',note:'可训练，不等于指南中的 8 路独立模拟灰度。'},
+      {id:'g8',name:'STP-23L 单点激光测距 / ToF',qty:'1',status:'已到货',priority:'P1',action:'确认 UART 电平、帧格式、测距频率和盲区。',note:'与指南 VL53L1X I²C 路线不同，需单独驱动。'},
+      {id:'g9',name:'MaixCAM Pro AI 视觉模块',qty:'1',status:'已到货',priority:'P2',action:'离线运行示例；确认向 MSPM0 输出 3.3V UART 坐标/状态。',note:'仅做视觉处理，电机与状态机仍由 MSPM0 控制。'},
+      {id:'g10',name:'二维云台 / 步进电机套装',qty:'1',status:'已到货',priority:'P2',action:'确认供电、电流、驱动方式和机械限位。',note:'高风险增强项；不得拖慢 P0。'},
+      {id:'g11',name:'接线、按键、焊台与基础耗材',qty:'一批',status:'已到货',priority:'P1',action:'按电压和方向标注；关键动力连接避免杜邦线。',note:'XH2.54、杜邦线、按键模块、焊台。'}
+    ],
+    focus: [
+      {id:'f1',text:'建立 MSPM0 项目目录、Git 仓库与接口命名表',done:false},
+      {id:'f2',text:'将 16 件已购设备录入台账，标出到货日期和规格链接',done:false},
+      {id:'f3',text:'确认 3S 电池到 6V / 5V / 3.3V 的分路图，不在未确认前接电',done:false}
+    ],
+    logs: [{id:'initial-log',date:'2026-07-19',author:'矫利渝',text:'状态更新：三名队员均已安装 CCS，所有采购设备已到货。',issue:'进入实物联调；先完成主控烧录、供电分路与单电机验证。'}]
+  };
+  let data;
+  try { data = JSON.parse(localStorage.getItem(key)) || structuredClone(initial); } catch { data = structuredClone(initial); }
+  const $ = s => document.querySelector(s); const esc = s => String(s ?? '').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  const statusName={planned:'未开始',progress:'进行中',blocked:'受阻',passed:'已通过'};
+  const save=()=>{ localStorage.setItem(key,JSON.stringify(data)); updateStats(); };
+  function weight(t){return t.priority==='P0'?5:t.priority==='P1'?2:1}
+  function updateStats(){ const all=data.tasks; const total=all.reduce((s,t)=>s+weight(t),0); const score=all.reduce((s,t)=>s+weight(t)*(t.progress/100),0); const p0=all.filter(t=>t.priority==='P0'); $('#overall').textContent=Math.round(score/total*100)+'%'; $('#overallBar').style.width=Math.round(score/total*100)+'%'; $('#corePass').textContent=p0.filter(t=>t.status==='passed').length+' / '+p0.length; $('#blockers').textContent=all.filter(t=>t.status==='blocked').length; const target=new Date('2026-07-29T08:00:00+08:00'); const now=new Date(); const hours=Math.ceil((target-now)/36e5); $('#daysLeft').textContent=hours>0?Math.ceil(hours/24)+' 天': '已到赛期'; }
+  function renderTimeline(){const holder=$('#timeline'); holder.innerHTML=''; for(let d=15;d<=29;d++){const el=document.createElement('div');el.className='day'+(d===15?' today':'')+(d===29?' race':'');el.innerHTML='<b>7/'+d+'</b><br><span>'+ (d===29?'比赛':'冲刺') +'</span>';holder.appendChild(el)}}
+  function badgeP(p){return '<span class="badge b-'+p.toLowerCase()+'">'+p+'</span>'} function badgeS(s){return '<span class="badge s-'+s+'">'+statusName[s]+'</span>'}
+  function renderTasks(){const pf=$('#priorityFilter').value,sf=$('#statusFilter').value; const rows=data.tasks.filter(t=>(pf==='all'||t.priority===pf)&&(sf==='all'||t.status===sf)).map(t=>`<tr data-id="${t.id}"><td class="task-title"><b>${esc(t.title)}</b><div class="mini">${esc(t.owner)}</div></td><td>${badgeP(t.priority)}</td><td class="mini">${t.start.slice(5)} — ${t.end.slice(5)}</td><td><select data-field="status"><option value="planned" ${t.status==='planned'?'selected':''}>未开始</option><option value="progress" ${t.status==='progress'?'selected':''}>进行中</option><option value="blocked" ${t.status==='blocked'?'selected':''}>受阻</option><option value="passed" ${t.status==='passed'?'selected':''}>已通过</option></select></td><td><input data-field="progress" type="range" min="0" max="100" value="${t.progress}"><span class="mini">${t.progress}%</span></td><td><textarea data-field="evidence">${esc(t.evidence)}</textarea></td><td><button data-delete="task" class="danger">删除</button></td></tr>`).join(''); $('#taskRows').innerHTML=rows || '<tr><td colspan="7" class="empty">没有匹配任务</td></tr>'; }
+  function renderGear(){ $('#gearRows').innerHTML=data.gear.map(g=>`<tr data-id="${g.id}"><td><input data-field="name" value="${esc(g.name)}"></td><td><input data-field="qty" value="${esc(g.qty)}"></td><td><select data-field="status"><option ${g.status==='已下单'?'selected':''}>已下单</option><option ${g.status==='已到货'?'selected':''}>已到货</option><option ${g.status==='已验证'?'selected':''}>已验证</option><option ${g.status==='待补购'?'selected':''}>待补购</option></select></td><td><select data-field="priority"><option ${g.priority==='P0'?'selected':''}>P0</option><option ${g.priority==='P1'?'selected':''}>P1</option><option ${g.priority==='P2'?'selected':''}>P2</option></select></td><td><textarea data-field="action">${esc(g.action)}</textarea></td><td><textarea data-field="note">${esc(g.note)}</textarea></td><td><button data-delete="gear" class="danger">删除</button></td></tr>`).join(); }
+  function renderFocus(){ $('#todayFocus').innerHTML=data.focus.map(f=>`<li><label><input type="checkbox" data-focus="${f.id}" ${f.done?'checked':''}>${esc(f.text)}</label></li>`).join(); }
+  function renderLogs(){const box=$('#logList'); if(!data.logs.length){box.innerHTML='<p class="empty">还没有日志。今天的第一条建议记录：CCS 平台已搭建，等待实板验证。</p>';return}box.innerHTML=[...data.logs].sort((a,b)=>b.date.localeCompare(a.date)).map(l=>`<article class="log"><b>${esc(l.author)}</b> <time>${esc(l.date)}</time><div>${esc(l.text).replace(/\n/g,'<br>')}</div>${l.issue?'<div class="mini">问题/下一步：'+esc(l.issue).replace(/\n/g,'<br>')+'</div>':''}</article>`).join('');}
+  function renderAll(){renderTimeline();renderTasks();renderGear();renderFocus();renderLogs();updateStats();}
+  document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('nav button,.panel').forEach(e=>e.classList.remove('active'));b.classList.add('active');$('#'+b.dataset.tab).classList.add('active')}));
+  $('#priorityFilter').onchange=renderTasks; $('#statusFilter').onchange=renderTasks;
+  $('#taskRows').addEventListener('input',e=>{const row=e.target.closest('tr');if(!row)return;const t=data.tasks.find(x=>x.id===row.dataset.id);const f=e.target.dataset.field;if(!t||!f)return;t[f]=f==='progress'?Number(e.target.value):e.target.value;if(f==='progress')e.target.nextElementSibling.textContent=t.progress+'%';save();});
+  $('#taskRows').addEventListener('change',e=>{if(e.target.dataset.field==='status'||e.target.dataset.field==='evidence')save();});
+  $('#taskRows').addEventListener('click',e=>{if(e.target.dataset.delete==='task'){data.tasks=data.tasks.filter(t=>t.id!==e.target.closest('tr').dataset.id);save();renderTasks();}});
+  $('#gearRows').addEventListener('input',e=>{const row=e.target.closest('tr');const g=data.gear.find(x=>x.id===row?.dataset.id);if(g&&e.target.dataset.field){g[e.target.dataset.field]=e.target.value;save();}}); $('#gearRows').addEventListener('change',e=>{const row=e.target.closest('tr');const g=data.gear.find(x=>x.id===row?.dataset.id);if(g&&e.target.dataset.field){g[e.target.dataset.field]=e.target.value;save();}}); $('#gearRows').addEventListener('click',e=>{if(e.target.dataset.delete==='gear'){data.gear=data.gear.filter(g=>g.id!==e.target.closest('tr').dataset.id);save();renderGear();}});
+  $('#todayFocus').addEventListener('change',e=>{const f=data.focus.find(x=>x.id===e.target.dataset.focus);if(f){f.done=e.target.checked;save();}});
+  $('#addTask').onclick=()=>{data.tasks.push({id:'t'+Date.now(),title:'新任务',owner:'待分配',priority:'P1',start:'2026-07-15',end:'2026-07-29',status:'planned',progress:0,evidence:'填写验收条件与实测证据。'});save();renderTasks()};
+  $('#addGear').onclick=()=>{data.gear.push({id:'g'+Date.now(),name:'新设备',qty:'1',status:'待补购',priority:'P1',action:'到货后验证。',note:''});save();renderGear()};
+  $('#resetTasks').onclick=()=>{if(confirm('仅恢复任务计划为初始状态，其他记录不变。确定吗？')){data.tasks=structuredClone(initial.tasks);save();renderTasks()}};
+  $('#logDate').value='2026-07-15'; $('#logForm').onsubmit=e=>{e.preventDefault();data.logs.push({id:Date.now(),date:$('#logDate').value,author:$('#logAuthor').value,text:$('#logText').value.trim(),issue:$('#logIssue').value.trim()});save();e.target.reset();$('#logDate').value='2026-07-15';renderLogs()};
+  $('#clearLogs').onclick=()=>{if(confirm('确定清空所有每日日志吗？')){data.logs=[];save();renderLogs()}};
+  $('#exportData').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='电赛备赛进度-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href)};
+  $('#importData').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const parsed=JSON.parse(r.result);if(!parsed.tasks||!parsed.gear)throw Error();data=parsed;save();renderAll();alert('导入成功。')}catch{alert('文件格式无效，未修改当前数据。')}};r.readAsText(f,'utf-8');e.target.value=''};
+  $('#downloadHtml').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='电赛备赛进度看板.html';a.click();URL.revokeObjectURL(a.href)};
+  renderAll();
+})();
+</script>
+</body>
+</html>
