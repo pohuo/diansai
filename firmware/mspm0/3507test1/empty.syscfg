@@ -13,6 +13,8 @@
 /**
  * Import the modules used in this configuration.
  */
+const GPIO    = scripting.addModule("/ti/driverlib/GPIO", {}, false);
+const GPIO1   = GPIO.addInstance();
 const SYSCTL  = scripting.addModule("/ti/driverlib/SYSCTL");
 const SYSTICK = scripting.addModule("/ti/driverlib/SYSTICK");
 
@@ -20,6 +22,21 @@ const SYSTICK = scripting.addModule("/ti/driverlib/SYSTICK");
  * Write custom configuration values to the imported modules.
  */
 SYSCTL.forceDefaultClkConfig = true;
+
+GPIO1.$name                                 = "GPIO_STATUS";
+GPIO1.associatedPins.create(1);
+GPIO1.associatedPins[0].$name               = "HEARTBEAT";
+GPIO1.associatedPins[0].assignedPort        = "PORTA";
+GPIO1.associatedPins[0].assignedPortSegment = "Lower";
+GPIO1.associatedPins[0].assignedPin         = "0";
+GPIO1.associatedPins[0].initialValue        = "CLEARED";
+GPIO1.associatedPins[0].pin.$assign         = "PA0";
+
+/* 32 MHz CPUCLK / 32000 = 1 ms system tick. */
+SYSTICK.period          = 32000;
+SYSTICK.periodEnable    = true;
+SYSTICK.systickEnable   = true;
+SYSTICK.interruptEnable = true;
 
 const Board = scripting.addModule("/ti/driverlib/Board", {}, false);
 

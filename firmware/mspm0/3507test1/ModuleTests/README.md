@@ -13,6 +13,7 @@ draft -> code_ready -> wiring_reviewed -> hardware_testing -> passed / blocked
 每个模块目录包含：
 
 - `README.md`：型号、供电、接口、接线步骤、预期现象和安全警告；
+- `*_interface.h`：硬件适配接口，只声明 GPIO/PWM/计时/采样回调，不写死未冻结引脚；
 - `test_*.h/.c`：单模块测试接口；
 - `result-template.md`：线下实测记录。
 

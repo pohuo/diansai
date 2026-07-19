@@ -31,11 +31,20 @@
  */
 
 #include "ti_msp_dl_config.h"
+#include "ModuleTests/00_board_bringup/test_board_bringup.h"
 
 int main(void)
 {
     SYSCFG_DL_init();
+    BoardBringupTest_Init();
 
     while (1) {
+        (void) BoardBringupTest_RunOnce();
+        __WFI();
     }
+}
+
+void SysTick_Handler(void)
+{
+    BoardBringupTest_OnTick1ms();
 }
