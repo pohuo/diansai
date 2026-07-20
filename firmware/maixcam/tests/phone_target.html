@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MaixCAM 彩色目标测试</title>
+  <style>
+    html,body{height:100%;margin:0;background:#fff;overflow:hidden;font-family:sans-serif}
+    #ball{position:absolute;width:120px;height:120px;border-radius:50%;background:#f00000;left:50%;top:50%;transform:translate(-50%,-50%)}
+    #panel{position:fixed;left:8px;bottom:8px;padding:8px;background:#ffffffcc;border:1px solid #aaa;border-radius:8px}
+    button,select,input{font-size:16px;margin:3px}
+  </style>
+</head>
+<body>
+  <div id="ball"></div>
+  <div id="panel">
+    <button id="move">开始移动</button>
+    <button id="hide">隐藏目标</button>
+    <select id="color">
+      <option value="#f00000">红色</option>
+      <option value="#00d020">绿色</option>
+      <option value="#004cff">蓝色</option>
+    </select>
+    <label>大小 <input id="size" type="range" min="30" max="240" value="120"></label>
+  </div>
+  <script>
+    const ball=document.querySelector('#ball'), moveBtn=document.querySelector('#move');
+    let moving=false,start=0;
+    document.querySelector('#color').onchange=e=>ball.style.background=e.target.value;
+    document.querySelector('#size').oninput=e=>{ball.style.width=e.target.value+'px';ball.style.height=e.target.value+'px'};
+    document.querySelector('#hide').onclick=e=>{const hidden=ball.style.display==='none';ball.style.display=hidden?'block':'none';e.target.textContent=hidden?'隐藏目标':'显示目标'};
+    moveBtn.onclick=()=>{moving=!moving;moveBtn.textContent=moving?'停止移动':'开始移动';if(moving)requestAnimationFrame(step)};
+    function step(t){if(!moving)return;if(!start)start=t;const p=(Math.sin((t-start)/900)+1)/2;ball.style.left=(10+p*80)+'%';requestAnimationFrame(step)}
+  </script>
+</body>
+</html>
