@@ -32,14 +32,17 @@
 
 #include "ti_msp_dl_config.h"
 #include "ModuleTests/00_board_bringup/test_board_bringup.h"
+#include "ModuleTests/07_vision_uart/vision_uart_mspm0_adapter.h"
 
 int main(void)
 {
     SYSCFG_DL_init();
     BoardBringupTest_Init();
+    VisionUartMspm0Adapter_Init();
 
     while (1) {
         (void) BoardBringupTest_RunOnce();
+        (void) VisionUartMspm0Adapter_RunOnce();
         __WFI();
     }
 }

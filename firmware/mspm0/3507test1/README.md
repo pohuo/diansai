@@ -1,14 +1,14 @@
 ## Example Summary
 
-Empty project using DriverLib.
-This example shows a basic empty project using DriverLib with just main file
-and SysConfig initialization.
+MSPM0G3507 单模块备赛工程，当前入口运行板级心跳和视觉 UART 非阻塞接收。其余模块通过 ModuleTests 下的硬件适配接口接入。
 
 ## Peripherals & Pin Assignments
 
 | Peripheral | Pin | Function |
 | --- | --- | --- |
 | SYSCTL |  |  |
+| UART1 | PA8 | TX to MaixCAM RX |
+| UART1 | PA9 | RX from MaixCAM TX |
 | DEBUGSS | PA20 | Debug Clock |
 | DEBUGSS | PA19 | Debug Data In Out |
 

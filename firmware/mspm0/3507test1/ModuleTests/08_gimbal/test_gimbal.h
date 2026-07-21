@@ -1,10 +1,47 @@
 #ifndef TEST_GIMBAL_H
 #define TEST_GIMBAL_H
 
+#include "gimbal_interface.h"
 #include "../common/module_test_contract.h"
 
+#define GIMBAL_TEST_PAN_MDEG          (15000L)
+#define GIMBAL_TEST_TILT_MDEG         (10000L)
+#define GIMBAL_TARGET_TOLERANCE_MDEG  (1000UL)
+#define GIMBAL_TARGET_TIMEOUT_MS      (2000UL)
+#define GIMBAL_REQUIRED_CYCLES        (10U)
+
+typedef enum {
+    GIMBAL_TEST_PHASE_IDLE = 0,
+    GIMBAL_TEST_PHASE_PAN_POSITIVE,
+    GIMBAL_TEST_PHASE_PAN_CENTER_FROM_POSITIVE,
+    GIMBAL_TEST_PHASE_PAN_NEGATIVE,
+    GIMBAL_TEST_PHASE_PAN_CENTER_FROM_NEGATIVE,
+    GIMBAL_TEST_PHASE_TILT_POSITIVE,
+    GIMBAL_TEST_PHASE_TILT_CENTER_FROM_POSITIVE,
+    GIMBAL_TEST_PHASE_TILT_NEGATIVE,
+    GIMBAL_TEST_PHASE_TILT_CENTER_FROM_NEGATIVE,
+    GIMBAL_TEST_PHASE_COMPLETE,
+    GIMBAL_TEST_PHASE_ABORTED
+} GimbalTestPhase;
+
+typedef enum {
+    GIMBAL_ERROR_NONE = 0,
+    GIMBAL_ERROR_INVALID_INTERFACE = 0x8001U,
+    GIMBAL_ERROR_NOT_INITIALIZED = 0x8002U,
+    GIMBAL_ERROR_ARM_REQUIRED = 0x8003U,
+    GIMBAL_ERROR_ESTOP_ACTIVE = 0x8004U,
+    GIMBAL_ERROR_COMMAND_REJECTED = 0x8005U,
+    GIMBAL_ERROR_LIMIT_ACTIVE = 0x8006U,
+    GIMBAL_ERROR_TARGET_TIMEOUT = 0x8007U,
+    GIMBAL_ERROR_ABORTED = 0x8008U
+} GimbalError;
+
+bool GimbalTest_Attach(const GimbalInterface *interface);
 void GimbalTest_Init(void);
+bool GimbalTest_Arm(void);
 ModuleTestResult GimbalTest_RunOnce(void);
 void GimbalTest_SafeStop(void);
+GimbalTestPhase GimbalTest_GetPhase(void);
+uint8_t GimbalTest_GetCompletedCycles(void);
 
 #endif

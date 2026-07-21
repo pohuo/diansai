@@ -27,3 +27,7 @@ Desktop.ini
 # Local toolchains and vendor SDKs must stay outside this repository
 ccs/
 mspm0_sdk_*/
+
+# Python generated files
+__pycache__/
+*.py[cod]
