@@ -25,28 +25,18 @@ const SYSCTL = scripting.addModule("/ti/driverlib/SYSCTL");
 SYSCTL.forceDefaultClkConfig = true;
 SYSCTL.clockTreeEn = true;
 
-GPIO1.$name = "MOTOR_DIR";
-GPIO1.associatedPins.create(4);
+GPIO1.$name = "DRV8701_DIR";
+GPIO1.associatedPins.create(2);
 
-GPIO1.associatedPins[0].$name = "LEFT_IN1";
+GPIO1.associatedPins[0].$name = "LEFT_PH";
 GPIO1.associatedPins[0].direction = "OUTPUT";
 GPIO1.associatedPins[0].initialValue = "CLEARED";
-GPIO1.associatedPins[0].pin.$assign = "PA13";
+GPIO1.associatedPins[0].pin.$assign = "PA14";
 
-GPIO1.associatedPins[1].$name = "LEFT_IN2";
+GPIO1.associatedPins[1].$name = "RIGHT_PH";
 GPIO1.associatedPins[1].direction = "OUTPUT";
 GPIO1.associatedPins[1].initialValue = "CLEARED";
-GPIO1.associatedPins[1].pin.$assign = "PA14";
-
-GPIO1.associatedPins[2].$name = "RIGHT_IN1";
-GPIO1.associatedPins[2].direction = "OUTPUT";
-GPIO1.associatedPins[2].initialValue = "CLEARED";
-GPIO1.associatedPins[2].pin.$assign = "PA17";
-
-GPIO1.associatedPins[3].$name = "RIGHT_IN2";
-GPIO1.associatedPins[3].direction = "OUTPUT";
-GPIO1.associatedPins[3].initialValue = "CLEARED";
-GPIO1.associatedPins[3].pin.$assign = "PA16";
+GPIO1.associatedPins[1].pin.$assign = "PA16";
 
 GPIO2.$name = "GRAY_ADDR";
 GPIO2.associatedPins.create(3);
@@ -77,18 +67,18 @@ ADC121.peripheral.adcPin0.$assign = "PA27";
 ADC121.adcPin0Config.$name = "ti_driverlib_gpio_GPIOPinGeneric2";
 
 const PWM1 = PWM.addInstance();
-PWM1.$name = "MOTOR_PWM";
-PWM1.timerCount = 500;
-PWM1.clockPrescale = 64;
+PWM1.$name = "DRV8701_PWM";
+PWM1.timerCount = 1600;
+PWM1.clockPrescale = 1;
 PWM1.ccIndex = [0, 1];
 PWM1.dutyArgs = "[0,0,0,0]";
 PWM1.pwmMode = "EDGE_ALIGN_UP";
 PWM1.peripheral.$assign = "TIMG6";
 PWM1.peripheral.ccp0Pin.$assign = "PB2";
 PWM1.peripheral.ccp1Pin.$assign = "PB3";
-PWM1.PWM_CHANNEL_0.$name = "LEFT_PWM";
+PWM1.PWM_CHANNEL_0.$name = "LEFT_EN";
 PWM1.PWM_CHANNEL_0.dutyCycle = 0;
-PWM1.PWM_CHANNEL_1.$name = "RIGHT_PWM";
+PWM1.PWM_CHANNEL_1.$name = "RIGHT_EN";
 PWM1.PWM_CHANNEL_1.dutyCycle = 0;
 
 UART1.$name = "UART_0";
