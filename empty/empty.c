@@ -1,11 +1,11 @@
 /*
- * MSPM0G3507 gray sensor debug firmware
+ * MSPM0G3507 eight-channel gray sensor + DRV8701 drive firmware
  *
- * Stage 1 goals:
- *   - Read 8-channel gray sensor values through 74HC4051
- *   - Print raw data over UART0 (HC-05 / USB serial)
- *   - Support simple white/black calibration commands
- *   - Keep motors stopped
+ * Safety defaults:
+ *   - Read and calibrate 8-channel gray values through 74HC4051
+ *   - Keep both motors braked after reset
+ *   - Require an explicit serial ARM or AUTO command before motion
+ *   - Search briefly toward the last line position, then brake if still lost
  */
 
 #include <stdbool.h>
@@ -14,16 +14,18 @@
 #include <string.h>
 
 #include "ti_msp_dl_config.h"
+#include "drv8701.h"
+#include "eight_gray_tracker.h"
 
-#define GRAY_SENSOR_COUNT          (8U)
+#define GRAY_SENSOR_COUNT          EIGHT_GRAY_SENSOR_COUNT
 #define GRAY_SAMPLE_AVG            (4U)
 #define GRAY_SETTLE_US             (8U)
+#define GRAY_CONTROL_INTERVAL_MS    (10U)
 #define GRAY_REPORT_INTERVAL_MS    (200U)
+#define GRAY_HEARTBEAT_INTERVAL_MS (1000U)
 #define GRAY_CAL_AVG_FRAMES        (8U)
-#define GRAY_DEFAULT_THRESHOLD     (1500U)
-#define GRAY_ACTIVE_MIN_THRESHOLD   (50U)
-#define GRAY_LINE_SUM_THRESHOLD    (180U)
-#define GRAY_HEARTBEAT_FRAMES      (5U)
+
+#define DRIVE_MANUAL_TIMEOUT_MS    (1000U)
 
 #define UART_CMD_BUF_LEN           (32U)
 
@@ -33,12 +35,12 @@ typedef enum {
     STREAM_STOPPED = 2,
 } StreamMode;
 
+
 typedef enum {
-    TURN_LOST = 0,
-    TURN_LEFT = 1,
-    TURN_STRAIGHT = 2,
-    TURN_RIGHT = 3,
-} TurnHint;
+    DRIVE_DISARMED = 0,
+    DRIVE_MANUAL = 1,
+    DRIVE_AUTO = 2,
+} DriveMode;
 
 typedef struct {
     uint16_t raw[GRAY_SENSOR_COUNT];
@@ -47,45 +49,27 @@ typedef struct {
     uint16_t black[GRAY_SENSOR_COUNT];
     uint16_t threshold[GRAY_SENSOR_COUNT];
     uint16_t span[GRAY_SENSOR_COUNT];
-    bool darkLow[GRAY_SENSOR_COUNT];
     bool whiteValid;
     bool blackValid;
     bool calibrated;
     bool lineValid;
     uint8_t digitalMask;
+    uint8_t activeCount;
     uint32_t activeSum;
     int32_t weightedError;
-    TurnHint turnHint;
+    EightGrayLineState lineState;
 } GrayCalib;
 
 static volatile bool gAdcReady = false;
 static GrayCalib gCal = {0};
+static EightGrayTracker gTracker = {0};
+static EightGrayFrame gTrackFrame = {0};
 static StreamMode gStreamMode = STREAM_RAW;
 static char gCmdBuf[UART_CMD_BUF_LEN];
 static uint8_t gCmdLen = 0U;
+static DriveMode gDriveMode = DRIVE_DISARMED;
+static uint32_t gManualAgeMs = 0U;
 
-static const int32_t gGrayWeights[GRAY_SENSOR_COUNT] = {
-    -3500, -2500, -1500, -500, 500, 1500, 2500, 3500
-};
-
-static uint16_t abs_diff_u16(uint16_t a, uint16_t b)
-{
-    return (a > b) ? (uint16_t)(a - b) : (uint16_t)(b - a);
-}
-
-static const char *gray_turn_hint_string(TurnHint hint)
-{
-    switch (hint) {
-        case TURN_LEFT:
-            return "LEFT";
-        case TURN_STRAIGHT:
-            return "STRAIGHT";
-        case TURN_RIGHT:
-            return "RIGHT";
-        default:
-            return "LOST";
-    }
-}
 
 static uint16_t gray_min_u16(const uint16_t *data)
 {
@@ -327,15 +311,26 @@ static void gray_print_reference_summary(const char *tag,
     uart_write_crlf();
 }
 
+static void gray_sync_calibration_view(void)
+{
+    const EightGrayCalibration *calibration = &gTracker.calibration;
+
+    for (uint8_t i = 0U; i < GRAY_SENSOR_COUNT; ++i) {
+        gCal.threshold[i] = calibration->threshold[i];
+        gCal.span[i] = calibration->span[i];
+    }
+}
+
 static void gray_update_calibration(void)
 {
-    for (uint8_t i = 0U; i < GRAY_SENSOR_COUNT; ++i) {
-        gCal.threshold[i] = (uint16_t)((gCal.white[i] + gCal.black[i]) / 2U);
-        gCal.span[i] = abs_diff_u16(gCal.white[i], gCal.black[i]);
-        gCal.darkLow[i] = (gCal.black[i] < gCal.white[i]);
+    if (!gCal.whiteValid || !gCal.blackValid) {
+        gCal.calibrated = false;
+        return;
     }
 
-    gCal.calibrated = gCal.whiteValid && gCal.blackValid;
+    gCal.calibrated = EightGray_setCalibration(
+        &gTracker, gCal.white, gCal.black);
+    gray_sync_calibration_view();
 
     if (gCal.calibrated) {
         gStreamMode = STREAM_CALIBRATED;
@@ -358,85 +353,150 @@ static void gray_capture_black(void)
     gray_print_reference_summary("BLACK", gCal.black);
 }
 
-static uint16_t gray_active_from_raw(uint8_t idx, uint16_t raw)
+static void gray_analyze_frame(GrayCalib *frame)
 {
-    uint16_t threshold = GRAY_DEFAULT_THRESHOLD;
-    bool darkLow = true;
-
-    if (gCal.calibrated) {
-        threshold = gCal.threshold[idx];
-        darkLow = gCal.darkLow[idx];
-    }
-
-    if (darkLow) {
-        return (raw < threshold) ? (uint16_t)(threshold - raw) : 0U;
-    }
-
-    return (raw > threshold) ? (uint16_t)(raw - threshold) : 0U;
-}
-
-static int32_t gray_analyze_frame(GrayCalib *frame)
-{
-    int32_t weightedSum = 0;
-    uint32_t activeSum = 0U;
-    uint8_t mask = 0U;
+    EightGray_analyze(&gTracker, frame->raw, &gTrackFrame);
 
     for (uint8_t i = 0U; i < GRAY_SENSOR_COUNT; ++i) {
-        uint16_t active = gray_active_from_raw(i, frame->raw[i]);
-        uint16_t activeThreshold = GRAY_ACTIVE_MIN_THRESHOLD;
-
-        if (gCal.calibrated && (gCal.span[i] > 0U)) {
-            uint16_t spanThreshold = (uint16_t)(gCal.span[i] / 8U);
-            if (spanThreshold > activeThreshold) {
-                activeThreshold = spanThreshold;
-            }
-        }
-
-        frame->active[i] = active;
-        activeSum += active;
-        weightedSum += (int32_t)active * gGrayWeights[i];
-
-        if (active > activeThreshold) {
-            mask |= (uint8_t)(1U << i);
-        }
+        frame->active[i] = gTrackFrame.active[i];
     }
+    frame->digitalMask = gTrackFrame.digitalMask;
+    frame->activeCount = gTrackFrame.activeCount;
+    frame->activeSum = gTrackFrame.activeSum;
+    frame->weightedError = gTrackFrame.weightedError;
+    frame->lineValid = gTrackFrame.lineValid;
+    frame->lineState = gTrackFrame.state;
+}
+/* ---------------------------- DRV8701 control ---------------------------- */
 
-    frame->digitalMask = mask;
-    frame->activeSum = activeSum;
-    frame->lineValid = (activeSum >= GRAY_LINE_SUM_THRESHOLD);
-
-    if (activeSum == 0U) {
-        frame->weightedError = 0;
-        frame->turnHint = TURN_LOST;
-        return 0;
+static const char *drive_mode_string(DriveMode mode)
+{
+    switch (mode) {
+        case DRIVE_MANUAL:
+            return "MANUAL";
+        case DRIVE_AUTO:
+            return "AUTO";
+        default:
+            return "DISARMED";
     }
-
-    frame->weightedError = weightedSum / (int32_t)activeSum;
-    if (!frame->lineValid) {
-        frame->turnHint = TURN_STRAIGHT;
-    } else if (frame->weightedError < -250) {
-        frame->turnHint = TURN_LEFT;
-    } else if (frame->weightedError > 250) {
-        frame->turnHint = TURN_RIGHT;
-    } else {
-        frame->turnHint = TURN_STRAIGHT;
-    }
-
-    return frame->weightedError;
 }
 
+static int16_t drive_clamp(int32_t value, int16_t minimum, int16_t maximum)
+{
+    if (value < minimum) {
+        return minimum;
+    }
+    if (value > maximum) {
+        return maximum;
+    }
+    return (int16_t) value;
+}
+
+static void drive_emergency_stop(void)
+{
+    DRV8701_brake();
+    EightGray_resetControl(&gTracker);
+    gDriveMode = DRIVE_DISARMED;
+    gManualAgeMs = 0U;
+}
+
+static void drive_arm_manual(void)
+{
+    DRV8701_brake();
+    EightGray_resetControl(&gTracker);
+    gDriveMode = DRIVE_MANUAL;
+    gManualAgeMs = DRIVE_MANUAL_TIMEOUT_MS;
+}
+
+static bool drive_start_auto(void)
+{
+    DRV8701_brake();
+    if (!gCal.calibrated) {
+        gDriveMode = DRIVE_DISARMED;
+        return false;
+    }
+
+    EightGray_resetControl(&gTracker);
+    gDriveMode = DRIVE_AUTO;
+    return true;
+}
+
+static bool drive_parse_manual_command(
+    const char *cmd, int16_t *left, int16_t *right)
+{
+    char normalized[UART_CMD_BUF_LEN];
+    long leftValue = 0;
+    long rightValue = 0;
+    size_t length;
+
+    if ((cmd == NULL) || (left == NULL) || (right == NULL) ||
+        (ascii_upper(cmd[0]) != 'M')) {
+        return false;
+    }
+
+    length = strlen(cmd);
+    if (length >= sizeof(normalized)) {
+        return false;
+    }
+
+    memcpy(normalized, cmd, length + 1U);
+    for (size_t i = 0U; i < length; ++i) {
+        if (normalized[i] == ',') {
+            normalized[i] = ' ';
+        }
+    }
+
+    if (sscanf(&normalized[1], "%ld %ld", &leftValue, &rightValue) != 2) {
+        return false;
+    }
+
+    *left = drive_clamp(leftValue,
+        -DRV8701_COMMAND_MAX, DRV8701_COMMAND_MAX);
+    *right = drive_clamp(rightValue,
+        -DRV8701_COMMAND_MAX, DRV8701_COMMAND_MAX);
+    return true;
+}
+
+static void drive_update(const GrayCalib *frame)
+{
+    EightGrayDriveCommand command = {0};
+
+    if (gDriveMode == DRIVE_DISARMED) {
+        DRV8701_brake();
+        return;
+    }
+
+    if (gDriveMode == DRIVE_MANUAL) {
+        if (gManualAgeMs < DRIVE_MANUAL_TIMEOUT_MS) {
+            gManualAgeMs += GRAY_CONTROL_INTERVAL_MS;
+        }
+        if (gManualAgeMs >= DRIVE_MANUAL_TIMEOUT_MS) {
+            DRV8701_brake();
+        }
+        return;
+    }
+
+    EightGray_computeDrive(&gTracker,
+        (frame != NULL) ? &gTrackFrame : NULL, &command);
+    if (command.brake) {
+        DRV8701_brake();
+    } else {
+        DRV8701_setMotors(command.leftCommand, command.rightCommand);
+    }
+}
 /* ------------------------------ UART helpers ----------------------------- */
 
 static void gray_print_help(void)
 {
-    uart_write_string("Commands: ");
-    uart_write_string("H=help, ");
-    uart_write_string("R=raw stream, ");
-    uart_write_string("C=calibrated stream, ");
-    uart_write_string("S=stop, ");
-    uart_write_string("W=capture white, ");
-    uart_write_string("B=capture black, ");
-    uart_write_string("T=status");
+    uart_write_string("Sensor: H=help, R=raw, C=calibrated, ");
+    uart_write_string("S=stream stop, W=white, B=black, T=status");
+    uart_write_crlf();
+    uart_write_string("Drive: ARM, M <left> <right>, AUTO/GO, ");
+    uart_write_string("X/STOP/ESTOP");
+    uart_write_crlf();
+    uart_write_string("Auto: normalized 8-channel PD + 150 ms lost search");
+    uart_write_crlf();
+    uart_write_string("Drive range: -1000..1000; manual watchdog: 1000 ms");
     uart_write_crlf();
 }
 
@@ -456,10 +516,20 @@ static void gray_print_status(void)
     uart_write_array_u16("", gCal.threshold, GRAY_SENSOR_COUNT);
     uart_write_string(",SPAN,");
     uart_write_array_u16("", gCal.span, GRAY_SENSOR_COUNT);
+    uart_write_string(",CAL_BAD,0x");
+    uart_write_hex8(gTracker.calibration.badChannelMask);
     uart_write_string(",MASK,0x");
     uart_write_hex8(gCal.digitalMask);
-    uart_write_string(",TURN,");
-    uart_write_string(gray_turn_hint_string(gCal.turnHint));
+    uart_write_string(",COUNT,");
+    uart_write_u32(gCal.activeCount);
+    uart_write_string(",STATE,");
+    uart_write_string(EightGray_lineStateString(gCal.lineState));
+    uart_write_string(",DRIVE,");
+    uart_write_string(drive_mode_string(gDriveMode));
+    uart_write_string(",LEFT,");
+    uart_write_i32(DRV8701_getLeftCommand());
+    uart_write_string(",RIGHT,");
+    uart_write_i32(DRV8701_getRightCommand());
     uart_write_crlf();
 }
 
@@ -489,8 +559,10 @@ static void gray_print_frame(const GrayCalib *frame)
     uart_write_u32(frame->lineValid ? 1U : 0U);
     uart_write_string(",MASK,0x");
     uart_write_hex8(frame->digitalMask);
-    uart_write_string(",TURN,");
-    uart_write_string(gray_turn_hint_string(frame->turnHint));
+    uart_write_string(",COUNT,");
+    uart_write_u32(frame->activeCount);
+    uart_write_string(",STATE,");
+    uart_write_string(EightGray_lineStateString(frame->lineState));
     uart_write_string(",CAL,");
     uart_write_u32(gCal.calibrated ? 1U : 0U);
     uart_write_crlf();
@@ -498,6 +570,9 @@ static void gray_print_frame(const GrayCalib *frame)
 
 static void gray_handle_command(const char *cmd)
 {
+    int16_t leftCommand = 0;
+    int16_t rightCommand = 0;
+
     if (cmd == NULL || *cmd == '\0') {
         return;
     }
@@ -505,6 +580,53 @@ static void gray_handle_command(const char *cmd)
     if (command_equals(cmd, "H") || command_equals(cmd, "HELP") ||
         command_equals(cmd, "?")) {
         gray_print_help();
+        return;
+    }
+
+    if (command_equals(cmd, "X") || command_equals(cmd, "STOP") ||
+        command_equals(cmd, "ESTOP")) {
+        drive_emergency_stop();
+        uart_write_string("DRIVE,DISARMED,BRAKE");
+        uart_write_crlf();
+        return;
+    }
+
+    if (command_equals(cmd, "ARM")) {
+        drive_arm_manual();
+        uart_write_string("DRIVE,MANUAL,ARMED");
+        uart_write_crlf();
+        return;
+    }
+
+    if (command_equals(cmd, "AUTO") || command_equals(cmd, "GO")) {
+        if (drive_start_auto()) {
+            uart_write_string("DRIVE,AUTO,ARMED");
+        } else {
+            uart_write_string("ERR,AUTO_REQUIRES_CALIBRATION");
+        }
+        uart_write_crlf();
+        return;
+    }
+
+    if (drive_parse_manual_command(
+            cmd, &leftCommand, &rightCommand)) {
+        if (gDriveMode != DRIVE_MANUAL) {
+            uart_write_string("ERR,DRIVE_NOT_ARMED,SEND_ARM_FIRST");
+        } else {
+            DRV8701_setMotors(leftCommand, rightCommand);
+            gManualAgeMs = 0U;
+            uart_write_string("DRIVE,MANUAL,LEFT,");
+            uart_write_i32(leftCommand);
+            uart_write_string(",RIGHT,");
+            uart_write_i32(rightCommand);
+        }
+        uart_write_crlf();
+        return;
+    }
+
+    if (ascii_upper(cmd[0]) == 'M') {
+        uart_write_string("ERR,MANUAL_FORMAT,M <left> <right>");
+        uart_write_crlf();
         return;
     }
 
@@ -522,14 +644,15 @@ static void gray_handle_command(const char *cmd)
         return;
     }
 
-    if (command_equals(cmd, "S") || command_equals(cmd, "STOP")) {
+    if (command_equals(cmd, "S") || command_equals(cmd, "STREAMSTOP")) {
         gStreamMode = STREAM_STOPPED;
-        uart_write_string("MODE,STOP");
+        uart_write_string("MODE,STREAM_STOPPED");
         uart_write_crlf();
         return;
     }
 
     if (command_equals(cmd, "W") || command_equals(cmd, "WHITE")) {
+        drive_emergency_stop();
         gray_capture_white();
         uart_write_string("CAPTURE,WHITE");
         uart_write_crlf();
@@ -542,6 +665,7 @@ static void gray_handle_command(const char *cmd)
     }
 
     if (command_equals(cmd, "B") || command_equals(cmd, "BLACK")) {
+        drive_emergency_stop();
         gray_capture_black();
         uart_write_string("CAPTURE,BLACK");
         uart_write_crlf();
@@ -561,7 +685,6 @@ static void gray_handle_command(const char *cmd)
     uart_write_string("ERR,UNKNOWN_CMD");
     uart_write_crlf();
 }
-
 static void uart_poll_commands(void)
 {
     while (!DL_UART_isRXFIFOEmpty(UART_0_INST)) {
@@ -571,37 +694,10 @@ static void uart_poll_commands(void)
         uart_write_hex8((uint8_t)ch);
         uart_write_crlf();
 
-        /*
-         * Allow one-byte commands from phone apps or terminal tools that do
-         * not append CR/LF. Keep full-word commands line-based.
-         */
-        if (gCmdLen == 0U) {
-            switch (ascii_upper(ch)) {
-                case 'H':
-                case '?':
-                    gray_handle_command("H");
-                    continue;
-                case 'R':
-                    gray_handle_command("R");
-                    continue;
-                case 'C':
-                    gray_handle_command("C");
-                    continue;
-                case 'S':
-                    gray_handle_command("S");
-                    continue;
-                case 'W':
-                    gray_handle_command("W");
-                    continue;
-                case 'B':
-                    gray_handle_command("B");
-                    continue;
-                case 'T':
-                    gray_handle_command("T");
-                    continue;
-                default:
-                    break;
-            }
+        /* X is the only immediate command; all others terminate with CR/LF. */
+        if ((gCmdLen == 0U) && (ascii_upper(ch) == 'X')) {
+            gray_handle_command("X");
+            continue;
         }
 
         if (ch == '\r' || ch == '\n') {
@@ -641,38 +737,66 @@ void ADC12_0_INST_IRQHandler(void)
 int main(void)
 {
     GrayCalib frame = {0};
-    uint32_t tick = 0U;
+    uint32_t reportElapsedMs = 0U;
+    uint32_t heartbeatElapsedMs = 0U;
 
     SYSCFG_DL_init();
+    EightGray_init(&gTracker);
+    DRV8701_init();
     NVIC_EnableIRQ(ADC12_0_INST_INT_IRQN);
 
-    uart_write_string("\r\nBOOT,GRAY_DEBUG\r\n");
+    uart_write_string("\r\nBOOT,GRAY_DRV8701\r\n");
     gray_print_help();
     uart_write_string("NOTE,HC05,9600,8N1");
     uart_write_crlf();
-    uart_write_string("NOTE,5V,GND_MUST_BE_COMMON");
+    uart_write_string("NOTE,DRV8701,20KHZ,POWER_ON_DISARMED");
+    uart_write_crlf();
+    uart_write_string("NOTE,TRACKER,NORMALIZED_PD,LOST_SEARCH_150MS");
+    uart_write_crlf();
+    uart_write_string("PIN,LEFT_EN,PB2,LEFT_PH,PA14");
+    uart_write_crlf();
+    uart_write_string("PIN,RIGHT_EN,PB3,RIGHT_PH,PA16");
     uart_write_crlf();
     uart_write_string("STREAM,RAW");
     uart_write_crlf();
 
     while (1) {
-        uart_poll_commands();
+        bool frameNeeded;
 
-        if (gStreamMode != STREAM_STOPPED) {
+        uart_poll_commands();
+        frameNeeded = (gStreamMode != STREAM_STOPPED) ||
+            (gDriveMode == DRIVE_AUTO);
+
+        if (frameNeeded) {
             gray_read_frame(&frame);
             gray_analyze_frame(&frame);
-
-            if (gStreamMode == STREAM_RAW || gStreamMode == STREAM_CALIBRATED) {
-                gray_print_frame(&frame);
-            }
+            gCal.lineValid = frame.lineValid;
+            gCal.digitalMask = frame.digitalMask;
+            gCal.activeCount = frame.activeCount;
+            gCal.activeSum = frame.activeSum;
+            gCal.weightedError = frame.weightedError;
+            gCal.lineState = frame.lineState;
+            drive_update(&frame);
+        } else {
+            drive_update(NULL);
         }
 
-        delay_ms(GRAY_REPORT_INTERVAL_MS);
+        reportElapsedMs += GRAY_CONTROL_INTERVAL_MS;
+        heartbeatElapsedMs += GRAY_CONTROL_INTERVAL_MS;
 
-        if (++tick >= GRAY_HEARTBEAT_FRAMES) {
-            tick = 0U;
-            uart_write_string("HB,OK");
+        if ((gStreamMode != STREAM_STOPPED) &&
+            (reportElapsedMs >= GRAY_REPORT_INTERVAL_MS)) {
+            reportElapsedMs = 0U;
+            gray_print_frame(&frame);
+        }
+
+        if (heartbeatElapsedMs >= GRAY_HEARTBEAT_INTERVAL_MS) {
+            heartbeatElapsedMs = 0U;
+            uart_write_string("HB,OK,DRIVE,");
+            uart_write_string(drive_mode_string(gDriveMode));
             uart_write_crlf();
         }
+
+        delay_ms(GRAY_CONTROL_INTERVAL_MS);
     }
 }
