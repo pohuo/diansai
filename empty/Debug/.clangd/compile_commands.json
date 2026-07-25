@@ -1,0 +1,12 @@
+[
+   {
+      "directory" : "D:/ccs/workspace/code/empty/Debug",
+      "command"   : "clang++ -D__MSPM0G3507__ -D__USE_SYSCONFIG__ -I\"D:/ccs/workspace/code/empty\" -I\"D:/ccs/workspace/code/empty/Debug\" -I\"C:/TI/mspm0_sdk_2_11_00_07/source/third_party/CMSIS/Core/Include\" -I\"C:/TI/mspm0_sdk_2_11_00_07/source\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/include/armv7em-ti-none-eabihf/c++/v1\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/include/c++/v1\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/lib/clang/22/include\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/include/c\" -xc",
+      "file"      : "D:/ccs/workspace/code/empty/Debug/ti_msp_dl_config.c"
+   },
+   {
+      "directory" : "D:/ccs/workspace/code/empty/Debug",
+      "command"   : "clang++ -D__MSPM0G3507__ -D__USE_SYSCONFIG__ -I\"D:/ccs/workspace/code/empty\" -I\"D:/ccs/workspace/code/empty/Debug\" -I\"C:/TI/mspm0_sdk_2_11_00_07/source/third_party/CMSIS/Core/Include\" -I\"C:/TI/mspm0_sdk_2_11_00_07/source\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/include/armv7em-ti-none-eabihf/c++/v1\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/include/c++/v1\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/lib/clang/22/include\" -isystem\"D:/ccs/install/ccs/tools/compiler/ti-cgt-armllvm_5.1.1.LTS/include/c\" -xc",
+      "file"      : "D:/ccs/workspace/code/empty/empty.c"
+   }
+]
