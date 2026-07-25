@@ -5,7 +5,7 @@
  *   - Read and calibrate 8-channel gray values through 74HC4051
  *   - Keep both motors braked after reset
  *   - Require an explicit serial ARM or AUTO command before motion
- *   - Brake immediately when automatic tracking loses the line
+ *   - Search briefly toward the last line position, then brake if still lost
  */
 
 #include <stdbool.h>
@@ -15,21 +15,16 @@
 
 #include "ti_msp_dl_config.h"
 #include "drv8701.h"
+#include "eight_gray_tracker.h"
 
-#define GRAY_SENSOR_COUNT          (8U)
+#define GRAY_SENSOR_COUNT          EIGHT_GRAY_SENSOR_COUNT
 #define GRAY_SAMPLE_AVG            (4U)
 #define GRAY_SETTLE_US             (8U)
 #define GRAY_CONTROL_INTERVAL_MS    (10U)
 #define GRAY_REPORT_INTERVAL_MS    (200U)
 #define GRAY_HEARTBEAT_INTERVAL_MS (1000U)
 #define GRAY_CAL_AVG_FRAMES        (8U)
-#define GRAY_DEFAULT_THRESHOLD     (1500U)
-#define GRAY_ACTIVE_MIN_THRESHOLD   (50U)
-#define GRAY_LINE_SUM_THRESHOLD    (180U)
 
-#define DRIVE_AUTO_BASE_COMMAND    (280)
-#define DRIVE_AUTO_MAX_COMMAND     (600)
-#define DRIVE_AUTO_CORRECTION_MAX  (240)
 #define DRIVE_MANUAL_TIMEOUT_MS    (1000U)
 
 #define UART_CMD_BUF_LEN           (32U)
@@ -40,12 +35,6 @@ typedef enum {
     STREAM_STOPPED = 2,
 } StreamMode;
 
-typedef enum {
-    TURN_LOST = 0,
-    TURN_LEFT = 1,
-    TURN_STRAIGHT = 2,
-    TURN_RIGHT = 3,
-} TurnHint;
 
 typedef enum {
     DRIVE_DISARMED = 0,
@@ -60,47 +49,27 @@ typedef struct {
     uint16_t black[GRAY_SENSOR_COUNT];
     uint16_t threshold[GRAY_SENSOR_COUNT];
     uint16_t span[GRAY_SENSOR_COUNT];
-    bool darkLow[GRAY_SENSOR_COUNT];
     bool whiteValid;
     bool blackValid;
     bool calibrated;
     bool lineValid;
     uint8_t digitalMask;
+    uint8_t activeCount;
     uint32_t activeSum;
     int32_t weightedError;
-    TurnHint turnHint;
+    EightGrayLineState lineState;
 } GrayCalib;
 
 static volatile bool gAdcReady = false;
 static GrayCalib gCal = {0};
+static EightGrayTracker gTracker = {0};
+static EightGrayFrame gTrackFrame = {0};
 static StreamMode gStreamMode = STREAM_RAW;
 static char gCmdBuf[UART_CMD_BUF_LEN];
 static uint8_t gCmdLen = 0U;
 static DriveMode gDriveMode = DRIVE_DISARMED;
 static uint32_t gManualAgeMs = 0U;
 
-static const int32_t gGrayWeights[GRAY_SENSOR_COUNT] = {
-    -3500, -2500, -1500, -500, 500, 1500, 2500, 3500
-};
-
-static uint16_t abs_diff_u16(uint16_t a, uint16_t b)
-{
-    return (a > b) ? (uint16_t)(a - b) : (uint16_t)(b - a);
-}
-
-static const char *gray_turn_hint_string(TurnHint hint)
-{
-    switch (hint) {
-        case TURN_LEFT:
-            return "LEFT";
-        case TURN_STRAIGHT:
-            return "STRAIGHT";
-        case TURN_RIGHT:
-            return "RIGHT";
-        default:
-            return "LOST";
-    }
-}
 
 static uint16_t gray_min_u16(const uint16_t *data)
 {
@@ -342,15 +311,26 @@ static void gray_print_reference_summary(const char *tag,
     uart_write_crlf();
 }
 
+static void gray_sync_calibration_view(void)
+{
+    const EightGrayCalibration *calibration = &gTracker.calibration;
+
+    for (uint8_t i = 0U; i < GRAY_SENSOR_COUNT; ++i) {
+        gCal.threshold[i] = calibration->threshold[i];
+        gCal.span[i] = calibration->span[i];
+    }
+}
+
 static void gray_update_calibration(void)
 {
-    for (uint8_t i = 0U; i < GRAY_SENSOR_COUNT; ++i) {
-        gCal.threshold[i] = (uint16_t)((gCal.white[i] + gCal.black[i]) / 2U);
-        gCal.span[i] = abs_diff_u16(gCal.white[i], gCal.black[i]);
-        gCal.darkLow[i] = (gCal.black[i] < gCal.white[i]);
+    if (!gCal.whiteValid || !gCal.blackValid) {
+        gCal.calibrated = false;
+        return;
     }
 
-    gCal.calibrated = gCal.whiteValid && gCal.blackValid;
+    gCal.calibrated = EightGray_setCalibration(
+        &gTracker, gCal.white, gCal.black);
+    gray_sync_calibration_view();
 
     if (gCal.calibrated) {
         gStreamMode = STREAM_CALIBRATED;
@@ -373,73 +353,20 @@ static void gray_capture_black(void)
     gray_print_reference_summary("BLACK", gCal.black);
 }
 
-static uint16_t gray_active_from_raw(uint8_t idx, uint16_t raw)
+static void gray_analyze_frame(GrayCalib *frame)
 {
-    uint16_t threshold = GRAY_DEFAULT_THRESHOLD;
-    bool darkLow = true;
-
-    if (gCal.calibrated) {
-        threshold = gCal.threshold[idx];
-        darkLow = gCal.darkLow[idx];
-    }
-
-    if (darkLow) {
-        return (raw < threshold) ? (uint16_t)(threshold - raw) : 0U;
-    }
-
-    return (raw > threshold) ? (uint16_t)(raw - threshold) : 0U;
-}
-
-static int32_t gray_analyze_frame(GrayCalib *frame)
-{
-    int32_t weightedSum = 0;
-    uint32_t activeSum = 0U;
-    uint8_t mask = 0U;
+    EightGray_analyze(&gTracker, frame->raw, &gTrackFrame);
 
     for (uint8_t i = 0U; i < GRAY_SENSOR_COUNT; ++i) {
-        uint16_t active = gray_active_from_raw(i, frame->raw[i]);
-        uint16_t activeThreshold = GRAY_ACTIVE_MIN_THRESHOLD;
-
-        if (gCal.calibrated && (gCal.span[i] > 0U)) {
-            uint16_t spanThreshold = (uint16_t)(gCal.span[i] / 8U);
-            if (spanThreshold > activeThreshold) {
-                activeThreshold = spanThreshold;
-            }
-        }
-
-        frame->active[i] = active;
-        activeSum += active;
-        weightedSum += (int32_t)active * gGrayWeights[i];
-
-        if (active > activeThreshold) {
-            mask |= (uint8_t)(1U << i);
-        }
+        frame->active[i] = gTrackFrame.active[i];
     }
-
-    frame->digitalMask = mask;
-    frame->activeSum = activeSum;
-    frame->lineValid = (activeSum >= GRAY_LINE_SUM_THRESHOLD);
-
-    if (activeSum == 0U) {
-        frame->weightedError = 0;
-        frame->turnHint = TURN_LOST;
-        return 0;
-    }
-
-    frame->weightedError = weightedSum / (int32_t)activeSum;
-    if (!frame->lineValid) {
-        frame->turnHint = TURN_STRAIGHT;
-    } else if (frame->weightedError < -250) {
-        frame->turnHint = TURN_LEFT;
-    } else if (frame->weightedError > 250) {
-        frame->turnHint = TURN_RIGHT;
-    } else {
-        frame->turnHint = TURN_STRAIGHT;
-    }
-
-    return frame->weightedError;
+    frame->digitalMask = gTrackFrame.digitalMask;
+    frame->activeCount = gTrackFrame.activeCount;
+    frame->activeSum = gTrackFrame.activeSum;
+    frame->weightedError = gTrackFrame.weightedError;
+    frame->lineValid = gTrackFrame.lineValid;
+    frame->lineState = gTrackFrame.state;
 }
-
 /* ---------------------------- DRV8701 control ---------------------------- */
 
 static const char *drive_mode_string(DriveMode mode)
@@ -468,6 +395,7 @@ static int16_t drive_clamp(int32_t value, int16_t minimum, int16_t maximum)
 static void drive_emergency_stop(void)
 {
     DRV8701_brake();
+    EightGray_resetControl(&gTracker);
     gDriveMode = DRIVE_DISARMED;
     gManualAgeMs = 0U;
 }
@@ -475,6 +403,7 @@ static void drive_emergency_stop(void)
 static void drive_arm_manual(void)
 {
     DRV8701_brake();
+    EightGray_resetControl(&gTracker);
     gDriveMode = DRIVE_MANUAL;
     gManualAgeMs = DRIVE_MANUAL_TIMEOUT_MS;
 }
@@ -487,6 +416,7 @@ static bool drive_start_auto(void)
         return false;
     }
 
+    EightGray_resetControl(&gTracker);
     gDriveMode = DRIVE_AUTO;
     return true;
 }
@@ -529,9 +459,7 @@ static bool drive_parse_manual_command(
 
 static void drive_update(const GrayCalib *frame)
 {
-    int32_t correction;
-    int16_t left;
-    int16_t right;
+    EightGrayDriveCommand command = {0};
 
     if (gDriveMode == DRIVE_DISARMED) {
         DRV8701_brake();
@@ -548,21 +476,13 @@ static void drive_update(const GrayCalib *frame)
         return;
     }
 
-    if ((frame == NULL) || !gCal.calibrated || !frame->lineValid) {
+    EightGray_computeDrive(&gTracker,
+        (frame != NULL) ? &gTrackFrame : NULL, &command);
+    if (command.brake) {
         DRV8701_brake();
-        return;
+    } else {
+        DRV8701_setMotors(command.leftCommand, command.rightCommand);
     }
-
-    correction = (frame->weightedError * DRIVE_AUTO_CORRECTION_MAX) / 3500;
-    correction = drive_clamp(correction,
-        -DRIVE_AUTO_CORRECTION_MAX, DRIVE_AUTO_CORRECTION_MAX);
-
-    /* Negative error means line is left: slow left wheel, speed right wheel. */
-    left = drive_clamp(DRIVE_AUTO_BASE_COMMAND + correction,
-        0, DRIVE_AUTO_MAX_COMMAND);
-    right = drive_clamp(DRIVE_AUTO_BASE_COMMAND - correction,
-        0, DRIVE_AUTO_MAX_COMMAND);
-    DRV8701_setMotors(left, right);
 }
 /* ------------------------------ UART helpers ----------------------------- */
 
@@ -573,6 +493,8 @@ static void gray_print_help(void)
     uart_write_crlf();
     uart_write_string("Drive: ARM, M <left> <right>, AUTO/GO, ");
     uart_write_string("X/STOP/ESTOP");
+    uart_write_crlf();
+    uart_write_string("Auto: normalized 8-channel PD + 150 ms lost search");
     uart_write_crlf();
     uart_write_string("Drive range: -1000..1000; manual watchdog: 1000 ms");
     uart_write_crlf();
@@ -594,10 +516,14 @@ static void gray_print_status(void)
     uart_write_array_u16("", gCal.threshold, GRAY_SENSOR_COUNT);
     uart_write_string(",SPAN,");
     uart_write_array_u16("", gCal.span, GRAY_SENSOR_COUNT);
+    uart_write_string(",CAL_BAD,0x");
+    uart_write_hex8(gTracker.calibration.badChannelMask);
     uart_write_string(",MASK,0x");
     uart_write_hex8(gCal.digitalMask);
-    uart_write_string(",TURN,");
-    uart_write_string(gray_turn_hint_string(gCal.turnHint));
+    uart_write_string(",COUNT,");
+    uart_write_u32(gCal.activeCount);
+    uart_write_string(",STATE,");
+    uart_write_string(EightGray_lineStateString(gCal.lineState));
     uart_write_string(",DRIVE,");
     uart_write_string(drive_mode_string(gDriveMode));
     uart_write_string(",LEFT,");
@@ -633,8 +559,10 @@ static void gray_print_frame(const GrayCalib *frame)
     uart_write_u32(frame->lineValid ? 1U : 0U);
     uart_write_string(",MASK,0x");
     uart_write_hex8(frame->digitalMask);
-    uart_write_string(",TURN,");
-    uart_write_string(gray_turn_hint_string(frame->turnHint));
+    uart_write_string(",COUNT,");
+    uart_write_u32(frame->activeCount);
+    uart_write_string(",STATE,");
+    uart_write_string(EightGray_lineStateString(frame->lineState));
     uart_write_string(",CAL,");
     uart_write_u32(gCal.calibrated ? 1U : 0U);
     uart_write_crlf();
@@ -813,6 +741,7 @@ int main(void)
     uint32_t heartbeatElapsedMs = 0U;
 
     SYSCFG_DL_init();
+    EightGray_init(&gTracker);
     DRV8701_init();
     NVIC_EnableIRQ(ADC12_0_INST_INT_IRQN);
 
@@ -821,6 +750,8 @@ int main(void)
     uart_write_string("NOTE,HC05,9600,8N1");
     uart_write_crlf();
     uart_write_string("NOTE,DRV8701,20KHZ,POWER_ON_DISARMED");
+    uart_write_crlf();
+    uart_write_string("NOTE,TRACKER,NORMALIZED_PD,LOST_SEARCH_150MS");
     uart_write_crlf();
     uart_write_string("PIN,LEFT_EN,PB2,LEFT_PH,PA14");
     uart_write_crlf();
@@ -841,9 +772,10 @@ int main(void)
             gray_analyze_frame(&frame);
             gCal.lineValid = frame.lineValid;
             gCal.digitalMask = frame.digitalMask;
+            gCal.activeCount = frame.activeCount;
             gCal.activeSum = frame.activeSum;
             gCal.weightedError = frame.weightedError;
-            gCal.turnHint = frame.turnHint;
+            gCal.lineState = frame.lineState;
             drive_update(&frame);
         } else {
             drive_update(NULL);
