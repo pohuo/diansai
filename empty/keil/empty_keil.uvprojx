@@ -122,16 +122,6 @@
               <FilePath>../motor_drv8701.h</FilePath>
             </File>
             <File>
-              <FileName>motor_tb6612.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../motor_tb6612.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_tb6612.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>../motor_tb6612.h</FilePath>
-            </File>
-            <File>
               <FileName>mpu6050.c</FileName>
               <FileType>1</FileType>
               <FilePath>../mpu6050.c</FilePath>
